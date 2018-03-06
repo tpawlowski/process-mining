@@ -1,0 +1,153 @@
+Apache Kafka & process mining
+Data: 12.02.2018
+Autor: Tomasz Pawłowski
+
+1. Ogólne
+
+Projekt przedstawia zastosowanie oprogramowania ProM do analizy procesów
+na podstawie strumienia logów. Podczas analizy logi, przekazywane przez 
+system apache kafka, dzielone są na paczki ze względu na daty z których 
+pochodzą. Każda paczka przekształcana jest do postaci XES, i analizowana 
+przy pomocy standardowych narzędzi programu ProM. Wyniki w postaci 
+plików xml i png przedstawiających sieci petriego procesu wysyłane są 
+do systemu kafka.
+
+2. Składniki
+
+Rozwiązanie składa się z:
+ - Skryptu kafka_start.sh konfigurującego i uruchamiającego kafkę
+ - Skryptu kafka_demo_producer.sh generującego przykładowe logi na podstawie 
+   plików z katalogu example-logs
+ - Katalogu example-logs z przykładowymi logami
+ - Katalogu Workshop z projektem java'owym dokładającym do ProM-a plugin 
+   obsługujący kafkę.
+ - Skryptu stream_processor.sh uruchamiającego projekt Workshop.  
+ - Programu kafkapngconsumer zapisującego obrazki z kafki do wybranego katalogu
+
+3. Wymagania
+
+kafka_start.sh nie ma dodatkowych wymagań. Skrypt pobiera na początku działania
+odpowiednią wersję kafki i uruchamia ją.
+
+kafka_demo_producer.sh wymaga działającej kafki i zainstalowania programu 
+gnu-awk użytego do parsowania logów.
+
+Projekt Workshop wymaga zainstalowania ant-a i doinstalowania do niego ivy.
+W przypadku macOS wygląda to następująco:
+
+brew install ant
+ant_home="$(ant -diagnostics | grep -m1 'ant.home:' | cut -d' ' -f2)"
+wget http://ftp.ps.pl/pub/apache//ant/ivy/2.4.0/apache-ivy-2.4.0-bin.tar.gz
+tar -xzf apache-ivy-2.4.0-bin.tar.gz
+cp apache-ivy-2.4.0/ivy-2.4.0.jar "$ant_home/lib/"
+rm -r apache-ivy-2.4.0-bin.tar.gz apache-ivy-2.4.0
+
+Po tej instalacji należy przejść do katalogu Workshop i zbudować projekt
+poleceniem 'ant'.
+
+4. Uruchomienie
+
+Uruchomienie powinno odbywać się w kolejności: 
+ - kafka_start.sh
+ - kafka_demo_producer.sh
+ - stream_processor.sh
+
+4.1. kafka_start.sh
+
+$ ./kafka_start.sh
+Downloading kafka_2.11-1.0.0.tgz from http://www-eu.apache.org/dist/kafka/1.0.0/kafka_2.11-1.0.0.tgz done
+Unpacking kafka_2.11-1.0.0.tgz done
+Resetting data directory done
+Starting ZooKeeper done with pid 21702
+Starting Kafka done with pid 21932
+Created topic "logs-input".
+Created topic "logs-petri".
+Created topic "logs-images".
+Press Ctrl+C to stop the server
+
+4.2. kafka_demo_producer.sh
+
+Ten skrypt przyjmuje jeden parametr - opóźnienie w sekundach między kolejnymi
+logami (wartość 0.2 oznacza opóźnienie 0.2s co linijkę logów, co przekłada się 
+na generowanie 4-5 linijek na sekundę).
+
+$ ./kafka_demo_producer.sh 0.05
+Generating log from file example-logs/L1.txt with date 2018-01-01 done
+Generating log from file example-logs/L2.txt with date 2018-01-02 done
+Generating log from file example-logs/L3.txt with date 2018-01-03 done
+Generating log from file example-logs/L4.txt with date 2018-01-04
+
+Logi generowane przez skrypt można podejrzeć następującą komendą:
+
+$ ./kafka_2.11-1.0.0/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic logs-input --property print.key=true --property key.separator=": "
+Case1.2.0: 1514762783000,a
+Case3.1.0: 1514766023000,a
+Case2.2.0: 1514766525000,a
+Case2.1.0: 1514768372000,a
+Case1.1.0: 1514773571000,a
+Case3.1.0: 1514775394000,e
+Case1.2.0: 1514775923000,b
+Case1.3.0: 1514776545000,a
+Case1.3.0: 1514779072000,b
+Case1.3.0: 1514781383000,c
+Case2.1.0: 1514783626000,c
+Case2.2.0: 1514783740000,c
+Case1.3.0: 1514783795000,d
+Case1.2.0: 1514788466000,c
+
+4.3. stream_processor.sh
+Działanie stream_processor.sh polega na uruchomieniu skryptu 
+Workshop/process_stream.txt. W wyniku logi z topiku logs-input
+przetwarzane są na sieci w topiku logs-petri i logs-images. 
+
+W celach testowych process_stream.txt zapisuje też te pliki 
+do katalogu /tmp.
+
+$ ./stream_processor.sh 
+>>> Scanning for plugins took 4.312 seconds
+Starting script execution engine...
+[-f, process_stream.txt]
+initializing all plugins
+...
+Start plug-in Kafka XES
+End plug-in Kafka XES, took 518 milliseconds
+Start plug-in Kafka Producer
+End plug-in Kafka Producer, took 1 milliseconds
+Started collecting log for day 2018-01-01
+Returning log for day 2018-01-01 next day started
+Started collecting log for day 2018-01-02
+Start plug-in Alpha Miner
+End plug-in Alpha Miner, took 52 milliseconds
+Start plug-in PNML export (Petri net)
+End plug-in PNML export (Petri net), took 20 milliseconds
+publishing petrinet 2018-01-01 to topic logs-petri
+serialized petrinet to xml
+Start plug-in Visualize Petri Net (Dot) [local]
+End plug-in Visualize Petri Net (Dot) [local], took 1380 milliseconds
+publishing image 2018-01-01 to topic logs-images
+serialized image to byte array of size 33713
+Returning log for day 2018-01-02 next day started
+Started collecting log for day 2018-01-03
+
+
+Wynikowe sieci petriego (w postaci xml/pnml) można podejrzeć komendą:
+$ ./kafka_2.11-1.0.0/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic logs-petri --property print.key=true --property key.separator=": "
+2018-03-30: <?xml version="1.0" encoding="ISO-8859-1"?>
+<pnml><net id="net1" type="http://www.pnml.org/version-2009/grammar/pnmlcoremodel"><name><text>Petri net (Alpha)</text></name><page id="n0"><name><text/></name><place id="n1"><name><text>([e],[f])</text></name><toolspecific tool="ProM" version="6.4" localNodeID="95db7511-6486-4897-b98c-e596cdc6bd72"/><graphics><position x="11.25" y="11.25"/><dimension x="12.5" y="12.5"/></graphics></place><place id="n2"><name><text>([c],[d])</text></name><toolspecific tool="ProM" version="6.4" localNodeID="46d9f62c-60ca-4db6-b37e-7b22cb110dff"/><graphics><position x="11.25" y="11.25"/><dimension x="12.5" y="12.5"/></graphics></place><place id="n3"><name><text>([a],[e])</text></name><toolspecific tool="ProM" version="6.4" localNodeID="a3f3d1a5-1400-4f80-9727-6174d26c438a"/><graphics><position x="11.25" y="11.25"/><dimension x="12.5" y="12.5"/></graphics></place><place id="n4"><name><text>([b],[c, f])</text></name><toolspecific tool="ProM" version="6.4" localNodeID="3b066aa8-6278-41bf-8b78-a57136d31a3e"/><graphics><position x="11.25" y="11.25"/><dimension x="12.5" y="12.5"/></graphics></place><place id="n5"><name><text>([a, d],[b])</text></name><toolspecific tool="ProM" version="6.4" localNodeID="f5b977e6-23ff-4b30-8b16-2f018a0db9aa"/><graphics><position x="11.25" y="11.25"/><dimension x="12.5" y="12.5"/></graphics></place><place id="n6"><name><text>Start</text></name><toolspecific tool="ProM" version="6.4" localNodeID="2a3a786a-8d88-45e6-9227-85d00557073a"/><graphics><position x="11.25" y="11.25"/><dimension x="12.5" y="12.5"/></graphics><initialMarking><text>1</text></initialMarking></place><place id="n7"><name><text>End</text></name><toolspecific tool="ProM" version="6.4" localNodeID="5469cb91-c9b6-4cd6-b877-7673ed76c1cc"/><graphics><position x="11.25" y="11.25"/><dimension x="12.5" y="12.5"/></graphics></place><transition id="n8"><name><text>a</text></name><toolspecific tool="ProM" version="6.4" activity="a" localNodeID="7e797985-9d26-4251-9d91-34c5d63a3c7c"/><graphics><position x="17.5" y="15.0"/><dimension x="25.0" y="20.0"/><fill color="#FFFFFF"/></graphics></transition><transition id="n9"><name><text>b</text></name><toolspecific tool="ProM" version="6.4" activity="b" localNodeID="cbacb69c-0311-476d-ab5b-5e41e0fe7918"/><graphics><position x="17.5" y="15.0"/><dimension x="25.0" y="20.0"/><fill color="#FFFFFF"/></graphics></transition><transition id="n10"><name><text>c</text></name><toolspecific tool="ProM" version="6.4" activity="c" localNodeID="707fc486-c1fb-4b7a-9ad5-2c00a85907e8"/><graphics><position x="17.5" y="15.0"/><dimension x="25.0" y="20.0"/><fill color="#FFFFFF"/></graphics></transition><transition id="n11"><name><text>d</text></name><toolspecific tool="ProM" version="6.4" activity="d" localNodeID="ab87096c-ad95-4b52-98c3-39be802618d7"/><graphics><position x="17.5" y="15.0"/><dimension x="25.0" y="20.0"/><fill color="#FFFFFF"/></graphics></transition><transition id="n12"><name><text>e</text></name><toolspecific tool="ProM" version="6.4" activity="e" localNodeID="373de05f-08ea-4486-b653-81ae7df97026"/><graphics><position x="17.5" y="15.0"/><dimension x="25.0" y="20.0"/><fill color="#FFFFFF"/></graphics></transition><transition id="n13"><name><text>f</text></name><toolspecific tool="ProM" version="6.4" activity="f" localNodeID="61260366-1564-4273-8726-631b83d3cade"/><graphics><position x="17.5" y="15.0"/><dimension x="25.0" y="20.0"/><fill color="#FFFFFF"/></graphics></transition><arc id="arc14" source="n9" target="n4"><name><text>1</text></name><toolspecific tool="ProM" version="6.4" localNodeID="484c44ed-5298-45bb-af63-fcbb819be817"/><arctype><text>normal</text></arctype></arc><arc id="arc15" source="n5" target="n9"><name><text>1</text></name><toolspecific tool="ProM" version="6.4" localNodeID="168fc027-8700-4cf6-81bb-39ffea027cf0"/><arctype><text>normal</text></arctype></arc><arc id="arc16" source="n4" target="n10"><name><text>1</text></name><toolspecific tool="ProM" version="6.4" localNodeID="93fb2f70-c4d6-4208-bddf-f84554b94740"/><arctype><text>normal</text></arctype></arc><arc id="arc17" source="n1" target="n13"><name><text>1</text></name><toolspecific tool="ProM" version="6.4" localNodeID="29c352d9-c97e-4a49-aeb9-553071b83bbc"/><arctype><text>normal</text></arctype></arc><arc id="arc18" source="n6" target="n8"><name><text>1</text></name><toolspecific tool="ProM" version="6.4" localNodeID="53b2d022-4d2c-4d57-ae63-4c59e2fbf3a9"/><arctype><text>normal</text></arctype></arc><arc id="arc19" source="n12" target="n1"><name><text>1</text></name><toolspecific tool="ProM" version="6.4" localNodeID="8d07cbef-7bc5-4f19-b258-d7bc7fe85098"/><arctype><text>normal</text></arctype></arc><arc id="arc20" source="n2" target="n11"><name><text>1</text></name><toolspecific tool="ProM" version="6.4" localNodeID="659b98a5-f714-4667-a66b-bcc8fdade6a2"/><arctype><text>normal</text></arctype></arc><arc id="arc21" source="n4" target="n13"><name><text>1</text></name><toolspecific tool="ProM" version="6.4" localNodeID="ca74c643-fc84-4c8a-8ce8-200b47b80c4c"/><arctype><text>normal</text></arctype></arc><arc id="arc22" source="n3" target="n12"><name><text>1</text></name><toolspecific tool="ProM" version="6.4" localNodeID="83edca12-ffdc-4200-9840-7a94398d13f0"/><arctype><text>normal</text></arctype></arc><arc id="arc23" source="n13" target="n7"><name><text>1</text></name><toolspecific tool="ProM" version="6.4" localNodeID="5c1e8b45-290b-488d-a2b4-35b25f178b9e"/><arctype><text>normal</text></arctype></arc><arc id="arc24" source="n8" target="n3"><name><text>1</text></name><toolspecific tool="ProM" version="6.4" localNodeID="dcfb8f5d-cb6b-45b6-a769-ba318349adca"/><arctype><text>normal</text></arctype></arc><arc id="arc25" source="n10" target="n2"><name><text>1</text></name><toolspecific tool="ProM" version="6.4" localNodeID="bc8f5a9a-d3dc-4822-80ea-0463f715f086"/><arctype><text>normal</text></arctype></arc><arc id="arc26" source="n11" target="n5"><name><text>1</text></name><toolspecific tool="ProM" version="6.4" localNodeID="2eed9d78-90a0-4da0-849e-accd277990d2"/><arctype><text>normal</text></arctype></arc><arc id="arc27" source="n8" target="n5"><name><text>1</text></name><toolspecific tool="ProM" version="6.4" localNodeID="02bf16c6-17ca-441a-aba7-b062cb3816da"/><arctype><text>normal</text></arctype></arc></page><finalmarkings/></net></pnml>
+
+4.4. KafkaPngConsumer
+
+Jest to prosty program którego jedynym celem jest nasłuchiwanie na topiku
+i zapisywanie danych napływających danych w wybranym katalogu. Każda wiadomość
+zachowywana jest w oddzielnym pliku w formacie KEY.png.
+
+Kompilacja jest standardowa: 
+$ mvn clean compile assembly:single
+
+Uruchomienie:
+$ java -cp target/kafka-png-consumer-0.1-jar-with-dependencies.jar com.example.KafkaPngConsumer logs-images out 60000
+Subscribing to topic logs-images
+Wrote png image to file out/2018-01-09.png
+Wrote png image to file out/2018-01-10.png
+Wrote png image to file out/2018-01-11.png
+

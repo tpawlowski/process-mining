@@ -1,0 +1,39 @@
+log_enumeration = kafka_xes("logs-input");
+producer = kafka_producer("localhost:9092");
+
+try {
+  while(log_enumeration.hasMoreElements()) {
+    log = log_enumeration.nextElement();
+    classifier = log.getClassifiers().get(0);
+    name = log.getAttributes().get("concept:name").toString();
+
+    net_and_marking = alpha_miner(log, classifier);
+    net = net_and_marking[0];
+
+    // debugging - same file is published in kafka.
+    File net_file = new File("/tmp/" + name + ".pnml");
+    pnml_export_petri_net_(net, net_file);
+
+    producer.publish("logs-petri", name, net);
+
+    javax.swing.JComponent comp = visualize_petri_net_dot_local_(net);
+    javax.swing.JFrame frame = new javax.swing.JFrame();
+    frame.add(comp);
+    frame.setSize(800,800);
+    frame.setVisible(true);
+    bi = new java.awt.image.BufferedImage(800, 800, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+    g = bi.createGraphics();
+    frame.paintComponents(g);
+    g.dispose();
+
+    // debugging - same files are saved in kafka
+    javax.imageio.ImageIO.write(bi, "png", new File("/tmp/" + name + ".png"));
+
+    producer.publish("logs-images", name, bi);
+  }
+} finally {
+  producer.flush();
+  producer.close();
+}
+
+

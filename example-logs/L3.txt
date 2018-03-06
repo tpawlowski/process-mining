@@ -1,0 +1,3 @@
+1x Case1 a  b  c  d  e  f  b  d  c  e  g
+2x Case2 a  b  d  c  e  g 
+1x Case3 a  b  c  d  e  f  b  c  d  e  f  b  d  c  e  g

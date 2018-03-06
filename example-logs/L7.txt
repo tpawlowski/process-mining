@@ -1,0 +1,4 @@
+2x Case1 a  c 
+3x Case2 a  b  c 
+2x Case3 a  b  b  c  
+1x Case4 a  b  b  b  b  c
