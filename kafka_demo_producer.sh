@@ -27,7 +27,7 @@ while true; do
             p = p + rand() + 0.00001;
             k = p / (NF - 2);
             s = int(k * 86399.0);
-            printf("%f%03d,%s.%d.%d:%d000,%s\n", k, e, $2, i, '$file_id', '$beginning_of_day' + s, $e);
+            printf("%f%03d,%d_%s:%s.%d.%d,%d000,%s\n", k, e, '$file_id', "'"L$((file_id%12+1)).txt"'", $2, i, '$file_id', '$beginning_of_day' + s, $e);
           }
         }
       }

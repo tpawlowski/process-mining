@@ -7,9 +7,12 @@
     <configurations>
    		<conf name="default" extends="lib" />
    		<conf name="lib" />
-	</configurations>  
+	</configurations>
     <dependencies defaultconf="default">
        <dependency org="prom" name="PetriNets" rev="latest" changing="true" transitive="true" />
-    	   <dependency org="org.apache.kafka" name="kafka_2.11" rev="1.0.0"/>	
+       <dependency org="prom" name="AlphaMiner" rev="latest" changing="true" transitive="true" />
+       <dependency org="prom-libs" name="OpenXES" rev="20171212" changing="true" transitive="true" />
+    	   <dependency org="org.apache.kafka" name="kafka-streams" rev="1.0.0"/>
+    	   <dependency org="org.apache.kafka" name="kafka_2.11" rev="1.0.0"/>
     </dependencies>
 </ivy-module>
