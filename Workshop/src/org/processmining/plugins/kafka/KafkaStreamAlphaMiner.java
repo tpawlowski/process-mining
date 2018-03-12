@@ -1,9 +1,7 @@
 package org.processmining.plugins.kafka;
 
 import java.util.Calendar;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -34,13 +32,14 @@ import org.processmining.alphaminer.algorithms.AlphaMiner;
 import org.processmining.alphaminer.algorithms.AlphaMinerFactory;
 import org.processmining.alphaminer.parameters.AlphaMinerParameters;
 import org.processmining.alphaminer.parameters.AlphaVersion;
+import org.processmining.contexts.cli.CLIContext;
+import org.processmining.contexts.cli.CLIPluginContext;
+import org.processmining.framework.plugin.PluginContext;
 import org.processmining.framework.util.Pair;
-import org.processmining.models.connections.GraphLayoutConnection;
 import org.processmining.models.graphbased.directed.petrinet.Petrinet;
-import org.processmining.models.graphbased.directed.petrinet.PetrinetGraph;
 import org.processmining.models.semantics.petrinet.Marking;
-import org.processmining.plugins.pnml.base.FullPnmlElementFactory;
 import org.processmining.plugins.pnml.base.Pnml;
+import org.processmining.plugins.pnml.exporting.PnmlExportNet;
 
 /**
  * In this example, we implement a Kafka Stream pipeline which windows logs by processtime (NOT event time), converts 
@@ -50,6 +49,8 @@ public class KafkaStreamAlphaMiner {
 	private static final XFactory factory = new XFactoryNaiveImpl();
 	private static final XExtensionManager extensionManager = XExtensionManager.instance();
 	private static final Calendar cal = Calendar.getInstance();
+	private static final PnmlExportNet exportNet = new PnmlExportNet();
+	private static final PluginContext context = new CLIPluginContext(new CLIContext(), "context");
 	
     public static void main(String[] args) throws Exception {
         System.out.println("Starting pipe");
@@ -70,7 +71,7 @@ public class KafkaStreamAlphaMiner {
         			AlphaMiner<XEventClass, ? extends AlphaClassicAbstraction<XEventClass>, ? extends AlphaMinerParameters> miner = AlphaMinerFactory
         					.createAlphaMiner(log, log.getClassifiers().get(0), new AlphaMinerParameters(AlphaVersion.CLASSIC));
         			Pair<Petrinet, Marking> net_and_marking = miner.run();
-        			String net_xml = exportPetriNetToPNMLString(net_and_marking.getFirst(), true);
+        			String net_xml = exportNet.exportPetriNetToPNMLOrEPNMLString(context, net_and_marking.getFirst(), Pnml.PnmlType.PNML, true);
         			return new KeyValue<String, String>(key, net_xml);
         		})
         		.to("logs-petri", Produced.with(Serdes.String(), Serdes.String()));
@@ -138,27 +139,6 @@ public class KafkaStreamAlphaMiner {
 		log.addAll(traces.values());
 		return log;
     }
-    
-    private static String exportPetriNetToPNMLString(Petrinet net, boolean xmlTag) {
-		Marking marking = new Marking();
-		Collection<Marking> finalMarkings = new HashSet<Marking>();
-		GraphLayoutConnection layout = new GraphLayoutConnection(net);
-		
-		HashMap<PetrinetGraph, Marking> markedNets = new HashMap<PetrinetGraph, Marking>();
-		HashMap<PetrinetGraph, Collection<Marking>> finalMarkedNets = new HashMap<PetrinetGraph, Collection<Marking>>();
-		markedNets.put(net, marking);
-		finalMarkedNets.put(net, finalMarkings);
-
-		Pnml pnml = new Pnml();
-		FullPnmlElementFactory factory = new FullPnmlElementFactory();
-		synchronized (factory) {
-			pnml.setFactory(factory);
-			pnml = pnml.convertFromNet(markedNets, finalMarkedNets, layout);
-		}
-		pnml.setType(Pnml.PnmlType.PNML);
-		pnml.setName(net.getLabel());
-		return (xmlTag ? "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>\n" : "") + pnml.exportElement(pnml);
-	}
     
     private static XLog emptyLog(String name) {
     		XFactory factory = new XFactoryNaiveImpl();
