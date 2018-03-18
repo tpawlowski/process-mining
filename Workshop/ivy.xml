@@ -14,5 +14,9 @@
        <dependency org="prom-libs" name="OpenXES" rev="20171212" changing="true" transitive="true" />
     	   <dependency org="org.apache.kafka" name="kafka-streams" rev="1.0.0"/>
     	   <dependency org="org.apache.kafka" name="kafka_2.11" rev="1.0.0"/>
+    	   <dependency org="org.apache.beam" name="beam-runners-direct-java" rev="2.3.0"/>
+    	   <dependency org="org.apache.beam" name="beam-sdks-java-core" rev="2.3.0"/>
+    	   <dependency org="org.apache.beam" name="beam-sdks-java-io-kafka" rev="2.3.0"/>
+    	   
     </dependencies>
 </ivy-module>

@@ -7,7 +7,7 @@
 	<property name="release" location="latestrelease" />
 	<property name="version" value="${major_minor}.${env.BUILD_NUMBER}" />
 	<property name="project" value="Workshop" />
-	<property name="main-class" value="org.processmining.plugins.kafka.KafkaStreamAlphaMiner" />
+	<property name="main-class" value="org.processmining.plugins.kafka.BeamAlpha" />
 
 	<property name="author" value="Tomasz Pawlowski" />
 	<property name="organisation" value="University of Warsaw" />
@@ -90,7 +90,7 @@
 	<!-- Group all dependencies into a big dependency-all.jar -->
 	<target name="copy-dependencies" depends="resolve">
 		<mkdir dir="${dist.lib.dir}" />
-		<jar jarfile="${dist.lib.dir}/dependencies-all.jar">
+		<jar jarfile="${dist.lib.dir}/dependencies-all.jar" zip64Mode="always">
 			<zipgroupfileset dir="${ivy.lib.dir}">
 				<include name="**/*.jar" />
 			</zipgroupfileset>
@@ -102,7 +102,7 @@
 		<mkdir dir="${dist.dir}" />
 		<mkdir dir="${dist.lib.dir}" />
 
-		<jar jarfile="${dist.dir}/${project}-with-dependencies.jar" basedir="${build}">
+		<jar jarfile="${dist.dir}/${project}-with-dependencies.jar" basedir="${build}" zip64Mode="always">
 			<manifest>
 				<attribute name="Main-Class" value="${main-class}" />
 			</manifest>

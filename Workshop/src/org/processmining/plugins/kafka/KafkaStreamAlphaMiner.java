@@ -1,8 +1,7 @@
 package org.processmining.plugins.kafka;
 
+import java.util.Arrays;
 import java.util.Calendar;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -16,17 +15,7 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.deckfour.xes.classification.XEventClass;
-import org.deckfour.xes.classification.XEventNameClassifier;
-import org.deckfour.xes.extension.XExtensionManager;
-import org.deckfour.xes.factory.XFactory;
-import org.deckfour.xes.factory.XFactoryNaiveImpl;
-import org.deckfour.xes.model.XEvent;
 import org.deckfour.xes.model.XLog;
-import org.deckfour.xes.model.XTrace;
-import org.deckfour.xes.model.impl.XAttributeLiteralImpl;
-import org.deckfour.xes.model.impl.XAttributeMapImpl;
-import org.deckfour.xes.model.impl.XAttributeTimestampImpl;
-import org.deckfour.xes.model.impl.XEventImpl;
 import org.processmining.alphaminer.abstractions.AlphaClassicAbstraction;
 import org.processmining.alphaminer.algorithms.AlphaMiner;
 import org.processmining.alphaminer.algorithms.AlphaMinerFactory;
@@ -46,9 +35,6 @@ import org.processmining.plugins.pnml.exporting.PnmlExportNet;
  * windows of data into logs and runs alpha miner on logs retuning petri net of recent logs. 
  */
 public class KafkaStreamAlphaMiner {
-	private static final XFactory factory = new XFactoryNaiveImpl();
-	private static final XExtensionManager extensionManager = XExtensionManager.instance();
-	private static final Calendar cal = Calendar.getInstance();
 	private static final PnmlExportNet exportNet = new PnmlExportNet();
 	private static final PluginContext context = new CLIPluginContext(new CLIContext(), "context");
 	
@@ -67,7 +53,7 @@ public class KafkaStreamAlphaMiner {
         		})
         		.map((key, combinedEntries) -> {
         			System.out.println(String.format("[%s]: %s analysing %d entries", Calendar.getInstance().getTime().toString(), key, combinedEntries.split("\\|").length));
-        			XLog log = parseXLog(key, combinedEntries);
+        			XLog log = XLogs.parse(key, Arrays.asList(combinedEntries.split("\\|")));
         			AlphaMiner<XEventClass, ? extends AlphaClassicAbstraction<XEventClass>, ? extends AlphaMinerParameters> miner = AlphaMinerFactory
         					.createAlphaMiner(log, log.getClassifiers().get(0), new AlphaMinerParameters(AlphaVersion.CLASSIC));
         			Pair<Petrinet, Marking> net_and_marking = miner.run();
@@ -108,48 +94,4 @@ public class KafkaStreamAlphaMiner {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
         return props;
     }
-    
-    private static XLog parseXLog(String key, String combinedEntries) {
-    		Map<String, XTrace> traces = new HashMap<String, XTrace>();
-		String[] encodedEntries = combinedEntries.split("\\|");
-		for (String encodedEntry: encodedEntries) {
-			String[] split = encodedEntry.split(",", 3);
-	        String caseId = split[0];
-	        long timestamp = Long.parseLong(split[1]);
-			String eventId = split[2];
-			
-			XTrace trace = traces.get(caseId);
-			if (trace == null) {
-				trace = factory.createTrace();
-				trace.getAttributes().put("concept:name", factory.createAttributeLiteral("concept:name", caseId, extensionManager.getByPrefix("concept")));
-				traces.put(caseId, trace);
-			}
-			
-			cal.setTimeInMillis(timestamp);
-			
-			XAttributeMapImpl map = new XAttributeMapImpl();
-			map.put("concept:name", new XAttributeLiteralImpl("concept:name", eventId));
-			map.put("lifecycle:transition", new XAttributeLiteralImpl("lifecycle:transition", "complete"));
-			map.put("time:timestamp", new XAttributeTimestampImpl("time:timestamp", cal.getTime()));
-			XEvent event = new XEventImpl(map);
-			
-			trace.add(event);
-		}
-		XLog log = emptyLog(key);
-		log.addAll(traces.values());
-		return log;
-    }
-    
-    private static XLog emptyLog(String name) {
-    		XFactory factory = new XFactoryNaiveImpl();
-    		XExtensionManager extensionManager = XExtensionManager.instance();
-		XLog log = factory.createLog();
-		log.getAttributes().put("concept:name", factory.createAttributeLiteral("concept:name", name, extensionManager.getByPrefix("concept")));
-		log.getAttributes().put("lifecycle:model", factory.createAttributeLiteral("lifecycle:model", "standard", extensionManager.getByPrefix("lifecycle")));
-		log.getExtensions().add(extensionManager.getByPrefix("time"));
-		log.getExtensions().add(extensionManager.getByPrefix("lifecycle"));
-		log.getExtensions().add(extensionManager.getByPrefix("concept"));
-		log.getClassifiers().add(new XEventNameClassifier());
-		return log;
-	}
 }
